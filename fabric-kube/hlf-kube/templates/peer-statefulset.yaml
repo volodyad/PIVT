@@ -3,6 +3,7 @@
 {{- range $peerIndex := until ($org.Template.Count | int) }}
 {{- $peer := (printf "peer%s" ($peerIndex | toString)) }}
 {{- $peerAddress := $.Values.useActualDomains | ternary (printf "%s.%s:7051" $peer $org.Domain) (printf "hlf-peer--%s--%s:7051" ($org.Name | lower) ($peer | lower)) }}
+{{- $ordererOrg := index .Values.OrdererOrgs 0 }}
 # peerAddress: {{ $peerAddress }}
 
 apiVersion: apps/v1
@@ -90,6 +91,10 @@ spec:
             path: tlscacerts/cert.pem
           - key: admincert.pem
             path: admincerts/cert.pem
+      - name: orderer-tlsca
+        secret:
+          # only use the first orderer
+          secretName: hlf-orderer--{{ $ordererOrg.Name | lower }}-tlsca
       # chaincodes
       {{- range $i, $chaincode := $.Values.network.chaincodes }}    
       - name: chaincode-{{ $chaincode.name | lower }}
@@ -273,7 +278,41 @@ spec:
           value: DEBUG
         - name: GRPC_TRACE
           value:  all
-        
+    
+      - name: cli
+        image: hyperledger/fabric-tools:{{ $.Values.hyperledgerVersion }}
+        stdin: true 
+        tty: true 
+        command: ["bash"]
+
+        volumeMounts:
+        - mountPath: /etc/hyperledger/fabric/tls/
+          name: peer-tls
+        - mountPath: /etc/hyperledger/fabric/msp/
+          name: peer-msp
+        - mountPath: /etc/hyperledger/fabric/admin-msp/
+          name: peer-admin-msp
+        - mountPath: /hlf_config/orderer-tlsca
+          name: orderer-tlsca
+
+        env:
+        - name: CORE_PEER_ADDRESS
+          value: {{ $peerAddress }}
+        - name: CORE_PEER_LOCALMSPID
+          value: {{ $org.Name }}MSP
+        - name: CORE_PEER_MSPCONFIGPATH
+          value: /etc/hyperledger/fabric/admin-msp/
+        - name: FABRIC_LOGGING_SPEC
+          value: {{ $.Values.peer.logLevel }}
+        - name: CORE_PEER_TLS_ENABLED
+          value: {{ $.Values.tlsEnabled | quote }}
+        - name: CORE_PEER_TLS_CERT_FILE
+          value: /etc/hyperledger/fabric/tls/server.crt
+        - name: CORE_PEER_TLS_KEY_FILE
+          value: /etc/hyperledger/fabric/tls/server.key
+        - name: CORE_PEER_TLS_ROOTCERT_FILE
+          value: /etc/hyperledger/fabric/tls/ca.crt
+
       # CouchDB container
       - name: couchdb
         image: hyperledger/fabric-couchdb:{{ $.Values.couchdb.version }}
