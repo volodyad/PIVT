@@ -39,6 +39,10 @@ spec:
           value: /etc/hyperledger/fabric-ca-server
         - name: FABRIC_CA_SERVER_CA_NAME
           value: ca-{{ $org.Name }}
+        - name: FABRIC_CA_SERVER_DB_TYPE
+          value: {{ $.Values.ca.dbType }}
+        - name: FABRIC_CA_SERVER_DB_DATASOURCE
+          value: {{ $.Values.ca.dbDataSource }}
         - name: FABRIC_CA_SERVER_TLS_ENABLED
           value: "false" # it's always false as we use Ingress for TLS termination. # {{ $.Values.tlsEnabled | quote }}
         - name: FABRIC_CA_SERVER_TLS_CERTFILE

@@ -100,6 +100,8 @@ ca:
   logLevel: info
   ingress:
     enabled: false
+  dbType: sqlite3
+  dbDataSource: fabric-ca-server.db
 
 # kafka settings
 hlf-kafka:
