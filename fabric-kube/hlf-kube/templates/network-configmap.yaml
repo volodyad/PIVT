@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hlf-network
+  labels:
+    type: network
+data:
+  network.yaml: | 
+    {{ $file := .Files.Get "files/network-tpl.yaml" }}{{ tpl $file . | nindent 4 }}

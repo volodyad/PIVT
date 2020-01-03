@@ -1,0 +1,79 @@
+name: "network"
+x-type: "hlfv1"
+x-commitTimeout: 300
+version: 1.0.0
+
+channels:
+{{- range $i, $channel := $.Values.network.channels }}
+  {{ $channel.name }}:
+    orderers:
+    {{- range $i, $ordererOrg := $.Values.OrdererOrgs }}
+    {{- range $i, $ordererHost := $ordererOrg.Specs }}
+    {{- $ordererFqdn := (printf "%s.%s" $ordererHost.Hostname $ordererOrg.Domain) }}
+      - {{ $ordererFqdn }} 
+    {{- end }}
+    {{- end }}
+    peers:
+    {{- range $i, $org := $.Values.PeerOrgs }}
+    {{- if has $org.Name $channel.orgs }}
+      {{- range $peerIndex := until ($org.Template.Count | int) }}
+      {{- $peer := (printf "peer%s" ($peerIndex | toString)) }}
+      {{- $peerFqdn := (printf "%s.%s" $peer $org.Domain) }}
+      - {{ $peerFqdn }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
+{{ end }}
+organizations:
+{{- range $i, $org := $.Values.PeerOrgs }}
+  {{ $org.Name }}:
+    mspid: {{ $org.Name }}MSP
+    peers: 
+      {{- range $peerIndex := until ($org.Template.Count | int) }}
+      {{- $peer := (printf "peer%s" ($peerIndex | toString)) }}
+      {{- $peerFqdn := (printf "%s.%s" $peer $org.Domain) }}
+      - {{ $peerFqdn }}
+      {{- end }}
+    certificateAuthorities:
+      - ca.{{ $org.Domain | lower }}
+{{ end }}
+orderers: 
+{{- range $i, $ordererOrg := $.Values.OrdererOrgs }}
+{{- range $i, $ordererHost := $ordererOrg.Specs }}
+{{- $ordererFqdn := (printf "%s.%s" $ordererHost.Hostname $ordererOrg.Domain) }}
+{{- $ordererAddress := $.Values.useActualDomains | ternary ($ordererFqdn) (printf "hlf-orderer--%s--%s" ($ordererOrg.Name | lower) ($ordererHost.Hostname | lower)) }} 
+  {{ $ordererFqdn }}:
+    url: grpcs://{{ $ordererAddress }}:7050
+    grpcOptions:
+      ssl-target-name-override: {{ $ordererFqdn }}
+    tlsCACerts:
+      pem: |
+        {{ $.Files.Get (printf "crypto-config/ordererOrganizations/%s/msp/tlscacerts/tlsca.%s-cert.pem" $ordererOrg.Domain $ordererOrg.Domain) }}
+{{- end }}
+{{- end }}
+peers: 
+{{- range $i, $org := $.Values.PeerOrgs }}
+{{- range $peerIndex := until ($org.Template.Count | int) }}
+{{- $peer := (printf "peer%s" ($peerIndex | toString)) }}
+{{- $peerFqdn := (printf "%s.%s" $peer $org.Domain) }}
+{{- $peerAddress := $.Values.useActualDomains | ternary ($peerFqdn) (printf "hlf-peer--%s--%s" ($org.Name | lower) ($peer | lower)) }}
+  {{ $peerFqdn }}:
+    url: grpcs://{{ $peerAddress }}:7051
+    eventUrl: "grpcs://{{ $peerAddress }}:7053",
+    grpcOptions:
+      ssl-target-name-override: {{ $peerFqdn }}
+    tlsCACerts:
+      pem: |
+        {{ $.Files.Get (printf "crypto-config/peerOrganizations/%s/peers/%s.%s/tls/ca.crt" $org.Domain $peer $org.Domain ) }}
+{{- end }}
+{{- end }}
+certificateAuthorities:
+{{- range $i, $org := $.Values.PeerOrgs }}
+{{- $caAddress := (printf "hlf-ca--%s" ($org.Name | lower)) }}
+{{- $caFqdn := (printf "ca.%s" ($org.Domain | lower)) }}
+  {{ $caFqdn }}:
+    url: https://{{ $caAddress }}:7054
+    caName: {{ $caFqdn }}
+    httpOptions:
+      verify: false
+{{- end }}
